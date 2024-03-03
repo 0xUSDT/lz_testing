@@ -4,6 +4,7 @@ import dotenv from 'dotenv'
 import networks from './networks'
 import 'hardhat-tracer'
 import 'solidity-docgen'
+import 'hardhat-deploy'
 
 dotenv.config()
 
@@ -56,5 +57,4 @@ const config: HardhatUserConfig = {
 		pages: 'files',
 	},
 }
-
 export default config
