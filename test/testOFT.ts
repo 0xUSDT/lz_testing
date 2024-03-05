@@ -2,6 +2,9 @@ import { expect } from 'chai'
 import { Contract, ContractFactory } from 'ethers'
 import hre, { ethers } from 'hardhat'
 import { deployments } from 'hardhat'
+// import {OFT} from '../typechain-types'
+import { EndpointV2Mock, OToken } from '../typechain-types'
+import { Options } from '@layerzerolabs/lz-v2-utilities'
 
 describe('MyOFT Test', async function () {
 	it('should send a token from A address to B address via each OFT', async function () {
@@ -25,29 +28,30 @@ describe('MyOFT Test', async function () {
 			endpointOwner,
 		)
 
-		// const EndpointV2MockFactory = new ethers.ContractFactory(
-		// 	EndpointV2MockArtifact.abi,
-		// 	EndpointV2MockArtifact.bytecode,
-		// 	endpointOwner, // or another signer if needed
-		// )
+		const mockEndpointA = (await EndpointV2Mock.deploy(
+			eidA,
+		)) as EndpointV2Mock
 
-		const mockEndpointA = await EndpointV2Mock.deploy(eidA)
-		const mockEndpointB = await EndpointV2Mock.deploy(eidB)
+		const mockEndpointB = (await EndpointV2Mock.deploy(
+			eidB,
+		)) as EndpointV2Mock
 
-		const myOFTA = await MyOFTFactory.deploy(
+		console.log('mockEndpoint', mockEndpointA.target)
+		console.log('mockEndpointB', mockEndpointB.target)
+
+		const myOFTA = (await MyOFTFactory.deploy(
 			'aOFT',
 			'aOFT',
 			mockEndpointA.target,
 			ownerA.address,
-			ethers.parseEther('1000'),
-		)
-		const myOFTB = await MyOFTFactory.deploy(
+		)) as OToken
+
+		const myOFTB = (await MyOFTFactory.deploy(
 			'bOFT',
 			'bOFT',
 			mockEndpointB.target,
 			ownerB.address,
-			ethers.parseEther('1000'),
-		)
+		)) as OToken
 
 		await mockEndpointA.setDestLzEndpoint(
 			myOFTB.target,
@@ -58,68 +62,65 @@ describe('MyOFT Test', async function () {
 			mockEndpointA.target,
 		)
 
+		await myOFTA
+			.connect(ownerA)
+			.setPeer(eidB, ethers.zeroPadValue(myOFTB.target, 32))
+		await myOFTB
+			.connect(ownerB)
+			.setPeer(eidA, ethers.zeroPadValue(myOFTA.target, 32))
+
+		const initialAmount = ethers.parseEther('100')
+
+		await myOFTA.mint(ownerA.address, initialAmount)
+
+		const tokensToSend = ethers.parseEther('1')
+		const sendParam = [
+			eidB,
+			ethers.zeroPadValue(ownerB.address, 32),
+			tokensToSend,
+			tokensToSend,
+		]
+		const options = Options.newOptions()
+			.addExecutorLzReceiveOption(200000, 0)
+			.toHex()
+			.toString()
+
+		const [nativeFee] = await myOFTA.quoteSend(
+			sendParam,
+			options,
+			false,
+			`0x`,
+			`0x`,
+		)
+
+		console.log(
+			'Quote data',
+			await myOFTA.quoteSend(sendParam, options, false, `0x`, `0x`),
+		)
+
+		await myOFTA.send(
+			sendParam,
+			options,
+			[nativeFee, 0],
+			ownerA.address,
+			'0x',
+			'0x',
+			{
+				value: nativeFee,
+			},
+		)
+		const finalBalanceA = await myOFTA.balanceOf(ownerA.address)
+		const finalBalanceB = await myOFTB.balanceOf(ownerB.address)
+
+		console.log('Tokens sent: ', tokensToSend)
+		console.log('Final balance A: ', finalBalanceA)
+		console.log('Final balance B: ', finalBalanceB)
+
+		expect(finalBalanceA).to.equal(initialAmount - tokensToSend)
+		expect(finalBalanceB).to.equal(tokensToSend)
 		return 0
 	})
 })
-
-// 	// Setting destination endpoints in the LZEndpoint mock for each MyOFT instance
-// 	await mockEndpointA.setDestLzEndpoint(myOFTB.address, mockEndpointB.address)
-// 	await mockEndpointB.setDestLzEndpoint(myOFTA.address, mockEndpointA.address)
-
-// 	// Setting each MyOFT instance as a peer of the other in the mock LZEndpoint
-// 	await myOFTA
-// 		.connect(ownerA)
-// 		.setPeer(eidB, ethers.utils.zeroPad(myOFTB.address, 32))
-// 	await myOFTB
-// 		.connect(ownerB)
-// 		.setPeer(eidA, ethers.utils.zeroPad(myOFTA.address, 32))
-
-// 	// A test case to verify token transfer functionality
-// 	it('should send a token from A address to B address via each OFT', async function () {
-// 		// Minting an initial amount of tokens to ownerA's address in the myOFTA contract
-// 		const initialAmount = ethers.utils.parseEther('100')
-// 		await myOFTA.mint(ownerA.address, initialAmount)
-
-// 		// Defining the amount of tokens to send and constructing the parameters for the send operation
-// 		const tokensToSend = ethers.utils.parseEther('1')
-// 		const sendParam = [
-// 			eidB,
-// 			ethers.utils.zeroPad(ownerB.address, 32),
-// 			tokensToSend,
-// 			tokensToSend,
-// 		]
-
-// 		// Defining extra message execution options for the send operation
-// 		const options = Options.newOptions()
-// 			.addExecutorLzReceiveOption(200000, 0)
-// 			.toHex()
-// 			.toString()
-
-// 		// Fetching the native fee for the token send operation
-// 		const [nativeFee] = await myOFTA.quoteSend(
-// 			sendParam,
-// 			options,
-// 			false,
-// 			`0x`,
-// 			`0x`,
-// 		)
-
-// 		// Executing the send operation from myOFTA contract
-// 		await myOFTA.send(
-// 			sendParam,
-// 			options,
-// 			[nativeFee, 0],
-// 			ownerA.address,
-// 			'0x',
-// 			'0x',
-// 			{
-// 				value: nativeFee,
-// 			},
-// 		)
-
-// 		// Fetching the final token balances of ownerA and ownerB
-// 		const finalBalanceA = await myOFTA.balanceOf(ownerA.address)
-// 		const finalBalanceB = await myOFTB.balanceOf(ownerB.address)
 
 // 		// Asserting that the final balances are as expected after the send operation
 // 		expect(finalBalanceA.eq(initialAmount.sub(tokensToSend))).to.be.true

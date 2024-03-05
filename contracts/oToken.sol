@@ -8,9 +8,10 @@ contract oToken is OFT {
         string memory _name,
         string memory _symbol,
         address _lzEndpoint,
-        address _delegate,
-        uint amountToMint
-    ) OFT(_name, _symbol, _lzEndpoint, _delegate) {
-        _mint(msg.sender, amountToMint);
+        address _delegate
+    ) OFT(_name, _symbol, _lzEndpoint, _delegate) {}
+
+    function mint(address _to, uint256 _amount) public {
+        _mint(_to, _amount);
     }
 }
